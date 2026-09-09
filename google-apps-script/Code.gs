@@ -14,25 +14,36 @@
  *     https://docs.google.com/spreadsheets/d/1-jFtB3KNHOh_KbztBFXl3s3qu0gKuUrzs6g2cSRyunc
  *  2. Extensiones → Apps Script.
  *  3. Borra el contenido de Code.gs que aparece por defecto y pega TODO este archivo.
- *  4. Guarda (icono de disco o Ctrl+S). Dale un nombre al proyecto si te lo pide.
- *  5. Arriba a la derecha: Implementar → Nueva implementación.
- *  6. Tipo: "Aplicación web".
- *     - Ejecutar como: "Yo" (tu cuenta).
- *     - Quién tiene acceso: "Cualquier usuario".
- *  7. Implementar. Google te pedirá autorizar permisos (Sheet + Gmail) — acéptalos.
- *  8. Copia la URL que termina en /exec. Esa es tu "URL del Web App".
- *  9. Pégala en lib/manifest.js, en window.__BRAND__.urls.appsScript.
+ *  4. Guarda (icono de disco o Ctrl+S).
+ *  5. Implementar → Gestionar implementaciones → ícono de lápiz sobre tu
+ *     implementación existente → Versión: "Nueva versión" → Implementar.
+ *     (Así la URL /exec no cambia. Solo usa "Nueva implementación" si de
+ *     verdad quieres una URL distinta — ver nota más abajo.)
  *
- * Si más adelante cambias este código, debes hacer "Nueva implementación" de
- * nuevo (o "Gestionar implementaciones" → editar) para que los cambios apliquen
- * a la URL ya publicada.
+ * NOTA SOBRE EL PDF — POR QUÉ SE VE ASÍ:
+ * La primera versión de este archivo intentaba convertir HTML con estilos
+ * CSS directamente a PDF vía `Utilities.newBlob(html,'text/html').getAs('pdf')`.
+ * Esa conversión de Apps Script NO respeta el CSS — solo extrae texto plano,
+ * por eso el PDF salía sin colores ni tarjetas.
  *
- * NOTA SOBRE EL PDF: Apps Script no tiene un motor de navegador completo —
- * no soporta flexbox/grid, variables CSS ni sombras. Por eso la plantilla de
- * abajo usa <table> con estilos en línea (el subconjunto de HTML/CSS que su
- * conversor SÍ respeta de forma confiable: colores de fondo, bordes,
- * tipografía, párrafos). El resultado usa los mismos colores y estructura
- * de tarjetas que la web, aunque no es un calco a nivel de píxel.
+ * Este archivo usa en cambio la API nativa de Documentos de Google
+ * (DocumentApp): colores de fondo reales sobre celdas de tabla, colores de
+ * texto reales, tipografía real. Es el mecanismo que Apps Script sí soporta
+ * de forma confiable para controlar la apariencia. Limitaciones honestas
+ * frente a la web:
+ *  - No hay esquinas redondeadas ni sombras (Google Docs no las soporta).
+ *  - La franja de color del bloque se logra con una columna angosta de una
+ *    tabla (no es un verdadero "border-left" de CSS).
+ *  - La etiqueta de zona (Roja/Amarilla/Verde) se muestra como texto en
+ *    negrita y en el color de la zona, no como una "píldora" con fondo de
+ *    color — Google Docs no soporta insertar una forma con color inline
+ *    dentro de una línea de texto.
+ *  - El título usa la fuente "Playfair Display" por nombre; si Google Docs
+ *    no la reconoce en tu cuenta, cae automáticamente a la fuente por
+ *    defecto (no rompe nada, solo se ve menos "serif").
+ * Aun con esas diferencias, el PDF sí lleva los colores reales de marca
+ * (carbón, terracota, gris ceniza) en franjas y tarjetas — algo que la
+ * versión anterior no lograba en absoluto.
  */
 
 var SHEET_NAME = "Hoja 1"; // Cambia esto si tu pestaña del Sheet tiene otro nombre.
@@ -50,11 +61,12 @@ var BRAND_COLORS = {
   ink: "#1C1C1C",
   inkSoft: "#4A4A4E",
   cream: "#FBFAF8",
+  white: "#FFFFFF",
   terracota: "#E07A5F",
   terracotaDark: "#C55F45"
 };
-var SERIF = "'Playfair Display', Georgia, 'Times New Roman', serif";
-var SANS = "'Inter', Arial, Helvetica, sans-serif";
+var SERIF_FONT = "Playfair Display";
+var SANS_FONT = "Arial"; // Arial es universal en Docs; más seguro que arriesgar "Inter" en el cuerpo de texto.
 
 function doPost(e) {
   try {
@@ -127,39 +139,87 @@ function markPaidAndEmail_(data) {
 }
 
 /**
- * Construye el HTML del reporte con la plantilla de marca (tablas + estilos
- * en línea) y lo envía por Gmail como PDF adjunto.
+ * Construye un Google Doc temporal con el diseño de marca, lo exporta a PDF
+ * y lo envía por Gmail. Borra el Doc temporal al terminar.
  */
 function sendReportEmail_(email, report) {
   if (!email) return;
 
-  var html = buildReportHtml_(report);
-  var pdfBlob = Utilities.newBlob(html, "text/html", "reporte.html")
-    .getAs("application/pdf")
-    .setName("Mapa-de-Reconfiguracion-" + (report.nombre || "reporte") + ".pdf");
+  var tempDoc = DocumentApp.create("Reporte temporal — " + (report.nombre || "") + " — " + new Date().toISOString());
+  var docId = tempDoc.getId();
+  try {
+    buildReportDoc_(tempDoc, report);
+    tempDoc.saveAndClose();
 
-  GmailApp.sendEmail(email, "Tu Mapa Completo de Reconfiguración", "", {
-    htmlBody: "Hola " + (report.nombre || "") + ",<br><br>Adjunto encontrarás tu Mapa Completo de Reconfiguración, " +
-      "generado a partir de tu diagnóstico “¿Fortaleza Real o Trampa?”.<br><br>Método Despierta™ — La Clave Exitosa",
-    attachments: [pdfBlob],
-    name: "La Clave Exitosa"
-  });
+    var pdfBlob = DriveApp.getFileById(docId).getAs(MimeType.PDF)
+      .setName("Mapa-de-Reconfiguracion-" + (report.nombre || "reporte") + ".pdf");
+
+    GmailApp.sendEmail(email, "Tu Mapa Completo de Reconfiguración", "", {
+      htmlBody: "Hola " + (report.nombre || "") + ",<br><br>Adjunto encontrarás tu Mapa Completo de Reconfiguración, " +
+        "generado a partir de tu diagnóstico “¿Fortaleza Real o Trampa?”.<br><br>Método Despierta™ — La Clave Exitosa",
+      attachments: [pdfBlob],
+      name: "La Clave Exitosa"
+    });
+  } finally {
+    DriveApp.getFileById(docId).setTrashed(true);
+  }
 }
 
+/* ============================================================================
+ * Helpers de construcción del documento
+ * ============================================================================ */
+
 /**
- * Escapa texto para insertarlo de forma segura dentro de HTML.
+ * Escribe una línea de texto en un contenedor (Body o TableCell), aplicando
+ * fuente/tamaño/color/negrita/espaciado. `first` indica si debe reusar el
+ * párrafo vacío inicial del contenedor (true) o agregar uno nuevo (false).
  */
-function escHtml_(s) {
-  return String(s == null ? "" : s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+function writeLine_(container, first, text, style) {
+  style = style || {};
+  var p = first ? container.getChild(0).asParagraph() : container.appendParagraph("");
+  p.setText(text || "");
+  var t = p.editAsText();
+  t.setFontFamily(style.font || SANS_FONT);
+  t.setFontSize(style.size || 11);
+  t.setForegroundColor(style.color || BRAND_COLORS.ink);
+  t.setBold(!!style.bold);
+  if (style.spacingBefore != null) p.setSpacingBefore(style.spacingBefore);
+  p.setSpacingAfter(style.spacingAfter != null ? style.spacingAfter : 0);
+  if (style.lineSpacing != null) p.setLineSpacing(style.lineSpacing);
+  return p;
+}
+
+/** Tabla de una sola celda que ocupa todo el ancho — simula una franja de color. */
+function addBand_(body, bgColor) {
+  var table = body.appendTable([[""]]);
+  table.setBorderWidth(0);
+  var cell = table.getCell(0, 0);
+  cell.setBackgroundColor(bgColor);
+  cell.setPaddingTop(16).setPaddingBottom(16).setPaddingLeft(20).setPaddingRight(20);
+  return cell;
+}
+
+/** Tabla de 2 columnas: una barra angosta de color de acento + una tarjeta con contenido. */
+function addCard_(body, bgColor, barColor) {
+  var table = body.appendTable([["", ""]]);
+  table.setBorderWidth(0);
+  table.setColumnWidth(0, 7);
+  var bar = table.getCell(0, 0);
+  bar.setBackgroundColor(barColor);
+  bar.setPaddingTop(0).setPaddingBottom(0).setPaddingLeft(0).setPaddingRight(0);
+  var content = table.getCell(0, 1);
+  content.setBackgroundColor(bgColor);
+  content.setPaddingTop(12).setPaddingBottom(12).setPaddingLeft(14).setPaddingRight(14);
+  return content;
+}
+
+/** Pequeño espacio vertical entre bloques (Docs no permite spacing en tablas). */
+function gap_(body, points) {
+  body.appendParagraph("").setFontSize(Math.max(1, Math.round(points * 0.6)));
 }
 
 /**
- * Plantilla del reporte en HTML basada en tablas con estilos en línea —
- * el subconjunto de CSS que el conversor de Apps Script soporta de forma
- * confiable (colores de fondo, bordes, tipografía). Recibe un objeto:
+ * Arma todo el contenido del reporte dentro del Doc temporal. Recibe:
  * {
  *   nombre, zonaPredominante, puntajeTotal, intro,
  *   bloques: [{ numero, titulo, zonaLabel, zonaColor, texto }, ...],
@@ -168,105 +228,70 @@ function escHtml_(s) {
  *   hotmartTrampa
  * }
  */
-function buildReportHtml_(r) {
-  var nombre = escHtml_(r.nombre);
+function buildReportDoc_(doc, r) {
   var C = BRAND_COLORS;
+  var body = doc.getBody();
+  body.clear();
+  body.setMarginTop(30).setMarginBottom(30).setMarginLeft(32).setMarginRight(32);
 
-  var blocksHtml = (r.bloques || []).map(function (b) {
-    return (
-      '<tr><td style="padding:0 0 18px 0;">' +
-        '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background-color:' + C.ash + ';border-left:4px solid ' + C.terracota + ';">' +
-          '<tr><td style="padding:20px 24px;">' +
-            '<table width="100%" cellpadding="0" cellspacing="0"><tr>' +
-              '<td style="font-family:' + SERIF + ';font-size:17px;font-weight:700;color:' + C.ink + ';">Bloque ' + b.numero + ' · ' + escHtml_(b.titulo) + '</td>' +
-              '<td align="right" style="white-space:nowrap;">' +
-                '<span style="background-color:' + b.zonaColor + ';color:#ffffff;font-family:' + SANS + ';font-size:11px;font-weight:700;padding:4px 12px;">' + escHtml_(b.zonaLabel) + '</span>' +
-              '</td>' +
-            '</tr></table>' +
-            '<p style="font-family:' + SANS + ';font-size:13.5px;line-height:1.6;color:' + C.inkSoft + ';margin:14px 0 0 0;">' + escHtml_(b.texto) + '</p>' +
-          '</td></tr>' +
-        '</table>' +
-      '</td></tr>'
-    );
-  }).join("");
+  // ---- Encabezado ----
+  var header = addBand_(body, C.carbon);
+  writeLine_(header, true, "TU MAPA DE RECONFIGURACIÓN", { font: SANS_FONT, size: 9, bold: true, color: C.terracota, spacingAfter: 6 });
+  writeLine_(header, false, "Tu diagnóstico, " + (r.nombre || ""), { font: SERIF_FONT, size: 19, bold: true, color: C.cream, spacingAfter: 10 });
+  writeLine_(header, false, r.intro || "", { font: SANS_FONT, size: 10, color: C.ashDark, lineSpacing: 1.3 });
 
-  var stepsHtml = (r.guion || []).map(function (p) {
-    return (
-      '<tr><td style="padding:0 0 12px 0;">' +
-        '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1.5px solid ' + C.ashDark + ';">' +
-          '<tr><td style="padding:14px 18px;">' +
-            '<p style="font-family:' + SANS + ';font-size:12.5px;font-weight:700;color:' + C.terracotaDark + ';margin:0 0 4px 0;">' + escHtml_(p.minuto) + '</p>' +
-            '<p style="font-family:' + SANS + ';font-size:13px;line-height:1.55;color:' + C.inkSoft + ';margin:0;">' + escHtml_(p.texto) + '</p>' +
-          '</td></tr>' +
-        '</table>' +
-      '</td></tr>'
-    );
-  }).join("");
+  gap_(body, 12);
 
-  var planHtml = (r.plan7dias || []).map(function (d) {
-    return (
-      '<tr><td style="padding:0 0 10px 0;">' +
-        '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background-color:' + C.ash + ';border-left:4px solid ' + C.terracota + ';">' +
-          '<tr>' +
-            '<td width="70" valign="top" style="padding:14px 0 14px 18px;font-family:' + SERIF + ';font-size:15px;font-weight:700;color:' + C.terracotaDark + ';white-space:nowrap;">Día ' + d.dia + '</td>' +
-            '<td valign="top" style="padding:14px 18px 14px 12px;">' +
-              '<p style="font-family:' + SANS + ';font-size:13px;font-weight:700;color:' + C.ink + ';margin:0 0 2px 0;">' + escHtml_(d.foco) + '</p>' +
-              '<p style="font-family:' + SANS + ';font-size:12.5px;color:' + C.inkSoft + ';margin:0;">' + escHtml_(d.accion) + '</p>' +
-            '</td>' +
-          '</tr>' +
-        '</table>' +
-      '</td></tr>'
-    );
-  }).join("");
+  // ---- Bloques ----
+  (r.bloques || []).forEach(function (b) {
+    var card = addCard_(body, C.ash, C.terracota);
+    writeLine_(card, true, "Bloque " + b.numero + " · " + (b.titulo || ""), { font: SERIF_FONT, size: 13, bold: true, color: C.ink, spacingAfter: 2 });
+    writeLine_(card, false, (b.zonaLabel || "").toUpperCase(), { font: SANS_FONT, size: 9, bold: true, color: b.zonaColor || C.ink, spacingAfter: 8 });
+    writeLine_(card, false, b.texto || "", { font: SANS_FONT, size: 11, color: C.inkSoft, lineSpacing: 1.3 });
+    gap_(body, 8);
+  });
 
-  return (
-    '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>' +
-    '<body style="margin:0;padding:0;background-color:' + C.cream + ';">' +
-    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background-color:' + C.cream + ';">' +
-      '<tr><td align="center">' +
-        '<table width="600" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">' +
+  gap_(body, 6);
 
-          // Header
-          '<tr><td style="background-color:' + C.carbon + ';padding:36px 40px;">' +
-            '<p style="font-family:' + SANS + ';font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:' + C.terracota + ';margin:0 0 10px 0;">Tu Mapa de Reconfiguración</p>' +
-            '<p style="font-family:' + SERIF + ';font-size:27px;font-weight:700;color:' + C.cream + ';margin:0;">Tu diagnóstico, ' + nombre + '</p>' +
-            '<p style="font-family:' + SANS + ';font-size:13px;color:' + C.ashDark + ';margin:14px 0 0 0;line-height:1.6;">' + escHtml_(r.intro) + '</p>' +
-          '</td></tr>' +
+  // ---- Protocolo ----
+  writeLine_(body, false, "Tu protocolo diario: " + (r.protocoloNombre || "Coherencia de 3 Minutos"), { font: SERIF_FONT, size: 14, bold: true, color: C.ink, spacingAfter: 10 });
 
-          '<tr><td style="height:28px;"></td></tr>' +
+  (r.guion || []).forEach(function (p) {
+    var box = addCard_(body, C.white, C.ashDark);
+    writeLine_(box, true, p.minuto || "", { font: SANS_FONT, size: 10, bold: true, color: C.terracotaDark, spacingAfter: 4 });
+    writeLine_(box, false, p.texto || "", { font: SANS_FONT, size: 10, color: C.inkSoft, lineSpacing: 1.3 });
+    gap_(body, 6);
+  });
 
-          // Blocks
-          '<tr><td><table width="100%" cellpadding="0" cellspacing="0">' + blocksHtml + '</table></td></tr>' +
+  gap_(body, 6);
 
-          '<tr><td style="height:8px;"></td></tr>' +
+  // ---- Plan de 7 días ----
+  writeLine_(body, false, "Tu plan de acción de 7 días", { font: SERIF_FONT, size: 14, bold: true, color: C.ink, spacingAfter: 10 });
 
-          // Protocol
-          '<tr><td style="padding:8px 0 12px 0;"><p style="font-family:' + SERIF + ';font-size:19px;font-weight:700;color:' + C.ink + ';margin:0;">Tu protocolo diario: ' + escHtml_(r.protocoloNombre || "Coherencia de 3 Minutos") + '</p></td></tr>' +
-          '<tr><td><table width="100%" cellpadding="0" cellspacing="0">' + stepsHtml + '</table></td></tr>' +
+  (r.plan7dias || []).forEach(function (d) {
+    var card = addCard_(body, C.ash, C.terracota);
+    writeLine_(card, true, "Día " + d.dia + " — " + (d.foco || ""), { font: SANS_FONT, size: 11, bold: true, color: C.ink, spacingAfter: 4 });
+    writeLine_(card, false, d.accion || "", { font: SANS_FONT, size: 10, color: C.inkSoft, lineSpacing: 1.3 });
+    gap_(body, 6);
+  });
 
-          '<tr><td style="height:20px;"></td></tr>' +
+  gap_(body, 12);
 
-          // 7-day plan
-          '<tr><td style="padding:0 0 12px 0;"><p style="font-family:' + SERIF + ';font-size:19px;font-weight:700;color:' + C.ink + ';margin:0;">Tu plan de acción de 7 días</p></td></tr>' +
-          '<tr><td><table width="100%" cellpadding="0" cellspacing="0">' + planHtml + '</table></td></tr>' +
+  // ---- Cierre / CTA ----
+  var cta = addBand_(body, C.carbon);
+  writeLine_(cta, true, "UN PASO MÁS", { font: SANS_FONT, size: 9, bold: true, color: C.terracota, spacingAfter: 6 });
+  writeLine_(cta, false, "La Trampa de Ser Siempre Fuerte", { font: SERIF_FONT, size: 16, bold: true, color: C.cream, spacingAfter: 8 });
+  writeLine_(cta, false,
+    "Este reporte te muestra el mapa. Pero si tu Zona Predominante es Amarilla o Roja, el mapa no basta — necesitas desmontar la identidad que construyó la trampa.",
+    { font: SANS_FONT, size: 10, color: C.ashDark, spacingAfter: 10, lineSpacing: 1.3 });
+  if (r.hotmartTrampa) {
+    var linkPara = writeLine_(cta, false, "Quiero desmontar la trampa — $47 USD → " + r.hotmartTrampa,
+      { font: SANS_FONT, size: 10, bold: true, color: C.terracota });
+    var linkText = linkPara.editAsText();
+    linkText.setLinkUrl(0, linkText.getText().length - 1, r.hotmartTrampa);
+  }
 
-          '<tr><td style="height:28px;"></td></tr>' +
-
-          // Closing CTA
-          '<tr><td style="background-color:' + C.carbon + ';padding:32px 40px;">' +
-            '<p style="font-family:' + SANS + ';font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:' + C.terracota + ';margin:0 0 8px 0;">Un paso más</p>' +
-            '<p style="font-family:' + SERIF + ';font-size:21px;font-weight:700;color:' + C.cream + ';margin:0 0 10px 0;">La Trampa de Ser Siempre Fuerte</p>' +
-            '<p style="font-family:' + SANS + ';font-size:13px;color:' + C.ashDark + ';margin:0 0 20px 0;line-height:1.6;">Este reporte te muestra el mapa. Pero si tu Zona Predominante es Amarilla o Roja, el mapa no basta — necesitas desmontar la identidad que construyó la trampa.</p>' +
-            (r.hotmartTrampa ? '<a href="' + escHtml_(r.hotmartTrampa) + '" style="display:inline-block;background-color:' + C.terracota + ';color:#ffffff;font-family:' + SANS + ';font-size:13px;font-weight:700;padding:13px 26px;text-decoration:none;">Quiero desmontar la trampa — $47 USD</a>' : '') +
-          '</td></tr>' +
-
-          '<tr><td style="padding:22px 40px;text-align:center;">' +
-            '<p style="font-family:' + SANS + ';font-size:11px;color:' + C.inkSoft + ';margin:0;">La Clave Exitosa — Método Despierta™ · Carlos Mario Escobar Pineda</p>' +
-          '</td></tr>' +
-
-        '</table>' +
-      '</td></tr>' +
-    '</table>' +
-    '</body></html>'
-  );
+  gap_(body, 10);
+  writeLine_(body, false, "La Clave Exitosa — Método Despierta™ · Carlos Mario Escobar Pineda",
+    { font: SANS_FONT, size: 9, color: C.inkSoft });
 }
