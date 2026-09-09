@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>¿Fortaleza Real o Trampa? — Diagnóstico de Resiliencia | Método Despierta™</title>
+  <meta name="description" content="Un diagnóstico de 12 preguntas para descubrir si tu fortaleza te está sosteniendo o te está quebrando por dentro. Método Despierta™, Carlos Mario Escobar Pineda.">
+  <meta name="robots" content="index, follow">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600;700&display=swap">
+
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css?v=20260909">
+
+  <meta property="og:title" content="¿Fortaleza Real o Trampa? — Diagnóstico de Resiliencia">
+  <meta property="og:description" content="¿Tu fortaleza te está fortaleciendo, o te está quebrando por dentro? Descúbrelo en 3 minutos.">
+  <meta property="og:type" content="website">
+</head>
+<body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+
+  <header class="site-header">
+    <div class="container">
+      <div class="brand">
+        <span class="brand-name">La Clave Exitosa</span>
+        <span class="brand-method">Método Despierta™</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="app">
+    <main class="app-main" id="main">
+      <div class="container">
+
+        <!-- ============ PANTALLA 1: LANDING ============ -->
+        <section class="screen landing" data-screen="landing">
+          <p class="eyebrow">Diagnóstico gratuito · 3 minutos</p>
+          <h1 class="landing-hook">¿Tu fortaleza te está fortaleciendo, o te está quebrando por dentro?</h1>
+          <p class="landing-sub">12 preguntas. Sin filtros, sin poses. Un diagnóstico directo sobre tu cuerpo, tu identidad y tu dirección — para saber si lo que llamas “resiliencia” es real, o es una trampa que ya te está cobrando factura.</p>
+          <button type="button" class="btn btn-primary btn-lg" data-action="start-quiz">Iniciar Diagnóstico</button>
+          <div class="landing-meta">
+            <span>12 preguntas</span>
+            <span>3 bloques de evaluación</span>
+            <span>Resultado inmediato</span>
+          </div>
+          <p class="landing-credit">Un diagnóstico de <strong>Carlos Mario Escobar Pineda</strong> — Método Despierta™</p>
+          <noscript>
+            <p style="margin-top:2rem;color:#C6482E;font-weight:600;">
+              Este diagnóstico es interactivo y necesita JavaScript activado en tu navegador para funcionar.
+            </p>
+          </noscript>
+        </section>
+
+        <!-- ============ PANTALLA 2: QUIZ ============ -->
+        <section class="screen card" data-screen="quiz" hidden>
+          <div class="progress"><div class="progress-bar" data-progress-bar></div></div>
+          <p class="quiz-block-label" data-quiz-block-label></p>
+          <h2 class="quiz-question" data-quiz-question></h2>
+          <div class="quiz-options" data-quiz-options></div>
+          <div class="quiz-nav">
+            <button type="button" class="quiz-back" data-action="quiz-back">← Anterior</button>
+            <span class="quiz-counter" data-quiz-counter></span>
+          </div>
+        </section>
+
+        <!-- ============ PANTALLA 3: RESULTADO GRATIS ============ -->
+        <section class="screen card" data-screen="result" hidden>
+          <p class="eyebrow" style="text-align:center;display:block;">Tu resultado</p>
+          <div class="gauge-wrap">
+            <svg class="gauge" viewBox="0 0 240 140" role="img" aria-label="Velocímetro de resultado">
+              <path d="M 30 120 A 90 90 0 0 1 75 42.06" fill="none" stroke="#4C9A6E" stroke-width="18" stroke-linecap="round"/>
+              <path d="M 75 42.06 A 90 90 0 0 1 165 42.06" fill="none" stroke="#E0A83E" stroke-width="18"/>
+              <path d="M 165 42.06 A 90 90 0 0 1 210 120" fill="none" stroke="#C6482E" stroke-width="18" stroke-linecap="round"/>
+              <circle cx="120" cy="120" r="8" fill="#1C1C1C"/>
+              <line class="gauge-needle" data-gauge-needle x1="120" y1="120" x2="120" y2="40" stroke="#1C1C1C" stroke-width="4" stroke-linecap="round" style="transform:rotate(-90deg);"/>
+            </svg>
+            <span class="gauge-zone-label" data-result-zone-label></span>
+            <p class="gauge-score"><span>Puntaje: </span><span data-result-score></span><span>/24</span></p>
+          </div>
+          <p class="result-frase" data-result-frase></p>
+
+          <form class="lead-form" data-lead-form novalidate>
+            <div class="field">
+              <label for="f-nombre">Nombre</label>
+              <input id="f-nombre" name="nombre" type="text" autocomplete="name" required>
+            </div>
+            <div class="field">
+              <label for="f-email">Email</label>
+              <input id="f-email" name="email" type="email" autocomplete="email" required>
+            </div>
+            <div class="field">
+              <label for="f-whatsapp">WhatsApp</label>
+              <input id="f-whatsapp" name="whatsapp" type="tel" autocomplete="tel" placeholder="+57 300 000 0000" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block btn-lg" data-action="submit-lead">Ver mi diagnóstico completo</button>
+            <p class="form-note">Tus datos se usan solo para enviarte tu diagnóstico. Sin spam.</p>
+          </form>
+
+          <div class="unlock-box" data-unlock-box hidden>
+            <p class="unlock-title">Ya tenemos tu zona predominante.</p>
+            <p class="unlock-sub">Pero un puntaje no te dice <em>por qué</em> estás ahí, ni qué hacer los próximos 7 días. Eso está en tu Mapa Completo de Reconfiguración.</p>
+            <a class="btn btn-primary btn-lg" data-hotmart-reporte href="#" target="_self">Desbloquea tu Mapa Completo de Reconfiguración</a>
+            <span class="unlock-price">Pago único de $19 USD · Acceso inmediato tras la compra</span>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>© <span data-year></span> <strong>La Clave Exitosa</strong> — Método Despierta™ · Carlos Mario Escobar Pineda</p>
+      </div>
+    </footer>
+  </div>
+
+  <script defer src="lib/manifest.js"></script>
+  <script defer src="main.js?v=20260909"></script>
+</body>
+</html>
