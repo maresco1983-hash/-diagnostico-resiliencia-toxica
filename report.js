@@ -36,34 +36,75 @@
     return txt.split("[NOMBRE]").join(nombre || "");
   }
 
-  function renderBlock(bloqueId, zonaKey, nombre) {
-    var tag = $("[data-block-zone-tag='" + bloqueId + "']");
-    tag.textContent = ZONE_LABELS[zonaKey] || zonaKey;
-    tag.style.background = ZONE_COLORS[zonaKey] || "#1C1C1C";
-    $("[data-block-text='" + bloqueId + "']").textContent = textoBloque(bloqueId, zonaKey, nombre);
+  /**
+   * Arma, una sola vez, todos los datos del reporte a partir del lead
+   * guardado. Se usa tanto para pintar la página como para el payload que
+   * arma el PDF con el mismo diseño en el servidor (Apps Script).
+   */
+  function buildReportData(lead) {
+    var nombre = lead.nombre || "";
+    var bloquesMeta = BRAND.bloques || [];
+
+    var bloques = [1, 2, 3].map(function (n) {
+      var zonaKey = lead["zonaBloque" + n];
+      var meta = bloquesMeta[n - 1] || {};
+      return {
+        numero: n,
+        titulo: meta.titulo || "",
+        zonaKey: zonaKey,
+        zonaLabel: ZONE_LABELS[zonaKey] || zonaKey,
+        zonaColor: ZONE_COLORS[zonaKey] || "#1C1C1C",
+        texto: textoBloque(n, zonaKey, nombre)
+      };
+    });
+
+    return {
+      nombre: nombre,
+      zonaPredominante: lead.zonaPredominante || "",
+      puntajeTotal: lead.puntajeTotal,
+      intro: "Este es tu mapa personalizado, " + nombre + ". Tu zona predominante es " +
+        (lead.zonaPredominante || "") + " (" + lead.puntajeTotal + "/24 puntos). " +
+        "A continuación, el desglose de cada bloque y tu plan de acción de 7 días.",
+      bloques: bloques,
+      protocoloNombre: (BRAND.protocolo || {}).nombre || "Coherencia de 3 Minutos",
+      guion: (BRAND.protocolo || {}).guion || [],
+      plan7dias: (BRAND.protocolo || {}).plan7dias || [],
+      hotmartTrampa: (BRAND.urls || {}).hotmartTrampa || ""
+    };
   }
 
-  function renderProtocol() {
-    var protocolo = BRAND.protocolo || {};
-    var wrap = $("[data-protocol-steps]");
-    if (!wrap || !protocolo.guion) return;
-    wrap.innerHTML = protocolo.guion.map(function (paso) {
-      return '<div class="protocol-step"><h4>' + escHTML(paso.minuto) + "</h4><p>" + escHTML(paso.texto) + "</p></div>";
-    }).join("");
+  function renderReport(reportData) {
+    $("[data-report-nombre]").textContent = reportData.nombre;
+    $("[data-report-intro]").textContent = reportData.intro;
+
+    reportData.bloques.forEach(function (b) {
+      var tag = $("[data-block-zone-tag='" + b.numero + "']");
+      tag.textContent = b.zonaLabel;
+      tag.style.background = b.zonaColor;
+      $("[data-block-text='" + b.numero + "']").textContent = b.texto;
+    });
+
+    var stepsWrap = $("[data-protocol-steps]");
+    if (stepsWrap) {
+      stepsWrap.innerHTML = reportData.guion.map(function (paso) {
+        return '<div class="protocol-step"><h4>' + escHTML(paso.minuto) + "</h4><p>" + escHTML(paso.texto) + "</p></div>";
+      }).join("");
+    }
+
+    var planWrap = $("[data-plan-table]");
+    if (planWrap) {
+      planWrap.innerHTML = reportData.plan7dias.map(function (d) {
+        return '<div class="plan-day"><div class="plan-day-num">Día ' + d.dia + '</div>' +
+          '<div class="plan-day-foco">' + escHTML(d.foco) + '</div>' +
+          '<div class="plan-day-accion">' + escHTML(d.accion) + "</div></div>";
+      }).join("");
+    }
+
+    var trampaLink = $("[data-hotmart-trampa]");
+    if (trampaLink) trampaLink.href = reportData.hotmartTrampa || "#";
   }
 
-  function renderPlan() {
-    var protocolo = BRAND.protocolo || {};
-    var wrap = $("[data-plan-table]");
-    if (!wrap || !protocolo.plan7dias) return;
-    wrap.innerHTML = protocolo.plan7dias.map(function (d) {
-      return '<div class="plan-day"><div class="plan-day-num">Día ' + d.dia + '</div>' +
-        '<div class="plan-day-foco">' + escHTML(d.foco) + '</div>' +
-        '<div class="plan-day-accion">' + escHTML(d.accion) + "</div></div>";
-    }).join("");
-  }
-
-  function markPaidAndEmail(lead, reportHtml) {
+  function markPaidAndEmail(lead, reportData) {
     var url = (BRAND.urls || {}).appsScript;
     if (!url) {
       console.warn("[markPaidAndEmail] BRAND.urls.appsScript está vacío — no se marcó el pago ni se envió el email (modo prueba local).");
@@ -79,7 +120,7 @@
           data: {
             nombre: lead.nombre,
             email: lead.email,
-            reportHtml: reportHtml
+            reportData: reportData
           }
         })
       }).catch(function (e) { console.warn("[markPaidAndEmail] fetch falló:", e); });
@@ -98,22 +139,8 @@
 
     $("[data-report]").hidden = false;
 
-    var nombre = lead.nombre || "";
-
-    $("[data-report-nombre]").textContent = nombre;
-    $("[data-report-intro]").textContent =
-      "Este es tu mapa personalizado, " + nombre + ". Tu zona predominante es " +
-      (lead.zonaPredominante || "") + " (" + lead.puntajeTotal + "/24 puntos). " +
-      "A continuación, el desglose de cada bloque y tu plan de acción de 7 días.";
-
-    renderBlock(1, lead.zonaBloque1, nombre);
-    renderBlock(2, lead.zonaBloque2, nombre);
-    renderBlock(3, lead.zonaBloque3, nombre);
-    renderProtocol();
-    renderPlan();
-
-    var trampaLink = $("[data-hotmart-trampa]");
-    if (trampaLink) trampaLink.href = (BRAND.urls || {}).hotmartTrampa || "#";
+    var reportData = buildReportData(lead);
+    renderReport(reportData);
 
     var printBtn = $("[data-action='print-report']");
     if (printBtn) printBtn.addEventListener("click", function () { window.print(); });
@@ -121,9 +148,9 @@
     var yearEl = $("[data-year]");
     if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-    // Marcar "Sí" en ¿Pagó Reporte? y disparar el email con el PDF adjunto.
-    var reportNode = $("[data-report]");
-    markPaidAndEmail(lead, reportNode ? reportNode.innerHTML : "");
+    // Marcar "Sí" en ¿Pagó Reporte? y disparar el email con el PDF adjunto,
+    // construido en el servidor con los mismos datos (mismo diseño de marca).
+    markPaidAndEmail(lead, reportData);
   }
 
   if (document.readyState === "loading") {
