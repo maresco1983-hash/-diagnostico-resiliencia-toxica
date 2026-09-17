@@ -67,6 +67,7 @@ var BRAND_COLORS = {
 };
 var SERIF_FONT = "Playfair Display";
 var SANS_FONT = "Arial"; // Arial es universal en Docs; más seguro que arriesgar "Inter" en el cuerpo de texto.
+var REPORT_COVER_URL = "https://diagnostico.laclavexitosa.com/assets/report-cover.jpg";
 
 function doPost(e) {
   try {
@@ -219,6 +220,25 @@ function gap_(body, points) {
 }
 
 /**
+ * Inserta la portada (report-cover.jpg) como página propia al inicio del
+ * documento. Si la imagen no se puede descargar (dominio caído, etc.), se
+ * omite en silencio — el reporte igual se genera y se envía sin portada.
+ */
+function addCoverImage_(body) {
+  try {
+    var blob = UrlFetchApp.fetch(REPORT_COVER_URL).getBlob();
+    var image = body.appendImage(blob);
+    var ratio = image.getHeight() / image.getWidth();
+    var width = 480;
+    image.setWidth(width);
+    image.setHeight(Math.round(width * ratio));
+    body.appendPageBreak();
+  } catch (e) {
+    // Sin portada esta vez; el resto del reporte se genera igual.
+  }
+}
+
+/**
  * Arma todo el contenido del reporte dentro del Doc temporal. Recibe:
  * {
  *   nombre, zonaPredominante, puntajeTotal, intro,
@@ -233,6 +253,8 @@ function buildReportDoc_(doc, r) {
   var body = doc.getBody();
   body.clear();
   body.setMarginTop(30).setMarginBottom(30).setMarginLeft(32).setMarginRight(32);
+
+  addCoverImage_(body);
 
   // ---- Encabezado ----
   var header = addBand_(body, C.carbon);
