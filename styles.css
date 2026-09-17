@@ -393,6 +393,46 @@ h1, h2, h3, h4 { font-family: var(--serif); text-wrap: balance; line-height: 1.1
 }
 
 /* =============================================================
+   6.5 Sección SEO (index.html — contenido visible bajo el quiz)
+   ============================================================= */
+.seo-section {
+  padding-block: clamp(2.5rem, 6vw, 4rem);
+  border-top: 1px solid var(--ash-2);
+}
+.seo-section h2 {
+  font-size: clamp(1.4rem, 3.4vw, 1.9rem);
+  max-width: 32ch;
+  margin-bottom: 1.1rem;
+}
+.seo-section > .container > p {
+  color: var(--ink-soft);
+  max-width: 68ch;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+.seo-section strong { color: var(--ink); }
+
+.faq-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.2rem;
+  margin-top: 2rem;
+}
+.faq-item h3 {
+  font-family: var(--sans);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--terracota-dark);
+  margin-bottom: 0.4rem;
+}
+.faq-item p {
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+/* =============================================================
    7. Footer
    ============================================================= */
 .site-footer {
@@ -522,4 +562,5 @@ h1, h2, h3, h4 { font-family: var(--serif); text-wrap: balance; line-height: 1.1
 }
 @media (min-width: 720px) {
   .card { padding: 3rem; }
+  .faq-grid { grid-template-columns: 1fr 1fr; gap: 1.6rem 2rem; }
 }
