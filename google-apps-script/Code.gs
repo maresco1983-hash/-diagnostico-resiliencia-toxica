@@ -317,3 +317,26 @@ function buildReportDoc_(doc, r) {
   writeLine_(body, false, "La Clave Exitosa — Método Despierta™ · Carlos Mario Escobar Pineda",
     { font: SANS_FONT, size: 9, color: C.inkSoft });
 }
+
+/**
+ * EJECUTAR MANUALMENTE UNA SOLA VEZ si el PDF llega sin portada.
+ *
+ * Un Web App no puede mostrar la pantalla de autorización de Google — si
+ * necesita un permiso nuevo (aquí: "conectarse a servicios externos", para
+ * descargar la imagen de portada) y ese permiso no fue concedido antes, la
+ * descarga falla en silencio y addCoverImage_ simplemente omite la portada
+ * para no romper el envío del correo.
+ *
+ * Para arreglarlo: en este editor, arriba, selecciona la función
+ * "autorizarDescargaDePortada" en el menú desplegable (junto al botón
+ * "Depurar") y presiona "Ejecutar" ▶. Te va a pedir autorizar permisos —
+ * acepta igual que las veces anteriores (Configuración avanzada → Ir a
+ * [proyecto] (no seguro) → Permitir). Revisa el "Registro de ejecución"
+ * (ícono de reloj a la izquierda) para confirmar que dice "Portada
+ * descargada correctamente". Después de esto, el PDF del reporte ya debería
+ * incluir la portada — no hace falta volver a implementar nada.
+ */
+function autorizarDescargaDePortada() {
+  var blob = UrlFetchApp.fetch(REPORT_COVER_URL).getBlob();
+  Logger.log("Portada descargada correctamente: " + blob.getBytes().length + " bytes.");
+}
