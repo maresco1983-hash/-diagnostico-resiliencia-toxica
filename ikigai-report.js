@@ -77,7 +77,7 @@
       plan7dias: (BRAND.protocolo || {}).plan7dias || [],
       hotmartTrampa: (BRAND.urls || {}).hotmartTrampa || "",
       // Overrides específicos de este producto para el PDF/email en Code.gs:
-      coverUrl: null,
+      coverUrl: "https://diagnostico.laclavexitosa.com/assets/ikigai-cover.jpg",
       eyebrowReporte: "TU MAPA DE PROPÓSITO Y NEURO-LIDERAZGO",
       emailSubject: "Tu Mapa de Propósito y Neuro-liderazgo",
       emailIntro: "Adjunto encontrarás tu Mapa de Propósito y Neuro-liderazgo, generado a partir de tu diagnóstico “¿Vives tu Propósito o Sobrevives tu Agenda?”.",
