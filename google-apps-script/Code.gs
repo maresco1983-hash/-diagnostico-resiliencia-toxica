@@ -1,13 +1,22 @@
 /**
- * Code.gs — Google Apps Script para el diagnóstico "¿Fortaleza Real o Trampa?"
+ * Code.gs — Google Apps Script compartido por los dos diagnósticos de
+ * La Clave Exitosa: "¿Fortaleza Real o Trampa?" (Resiliencia Tóxica) y
+ * "¿Vives tu Propósito o Sobrevives tu Agenda?" (Ikigai + Neuro-liderazgo).
  *
  * QUÉ HACE:
- *  1. action "addLead"          → agrega una fila nueva al Google Sheet.
- *  2. action "markPaidAndEmail" → busca la fila más reciente de ese email,
- *                                 marca "Sí" en ¿Pagó Reporte?, y envía el
- *                                 reporte por correo como PDF con el diseño
- *                                 de marca (colores, tarjetas por bloque,
- *                                 tipografía serif en títulos).
+ *  1. action "addLead"          → agrega una fila nueva al Google Sheet, en
+ *                                 la pestaña del producto correspondiente
+ *                                 ("Hoja 1" para Resiliencia, "Leads Ikigai"
+ *                                 para Ikigai — ver data.producto).
+ *  2. action "markPaidAndEmail" → busca la fila más reciente de ese email en
+ *                                 la pestaña del producto, marca "Sí" en
+ *                                 ¿Pagó Reporte?, y envía el reporte por
+ *                                 correo como PDF con el diseño de marca
+ *                                 (colores, tarjetas por bloque, tipografía
+ *                                 serif en títulos). El texto/portada del PDF
+ *                                 se adapta por producto vía overrides
+ *                                 opcionales en reportData (ver
+ *                                 buildReportDoc_ y addCoverImage_).
  *
  * CÓMO INSTALARLO (una sola vez, lo hace el dueño del Sheet):
  *  1. Abre el Google Sheet:
@@ -47,6 +56,7 @@
  */
 
 var SHEET_NAME = "Hoja 1"; // Cambia esto si tu pestaña del Sheet tiene otro nombre.
+var SHEET_NAME_IKIGAI = "Leads Ikigai"; // Pestaña del segundo diagnóstico (Ikigai + Neuro-liderazgo). Se crea sola si no existe.
 var HEADERS = [
   "Nombre", "Email", "WhatsApp", "Fecha", "Zona Predominante",
   "Puntaje Bloque 1", "Puntaje Bloque 2", "Puntaje Bloque 3", "Puntaje Total",
@@ -69,6 +79,14 @@ var SERIF_FONT = "Playfair Display";
 var SANS_FONT = "Arial"; // Arial es universal en Docs; más seguro que arriesgar "Inter" en el cuerpo de texto.
 var REPORT_COVER_URL = "https://diagnostico.laclavexitosa.com/assets/report-cover.jpg";
 
+// Valores por defecto del PDF/email — usados cuando el reportData no trae su
+// propio override (así el diagnóstico de Resiliencia Tóxica, cuyo report.js
+// no envía estos campos, sigue viéndose exactamente igual que antes).
+var REPORT_EYEBROW_DEFAULT = "TU MAPA DE RECONFIGURACIÓN";
+var EMAIL_SUBJECT_DEFAULT = "Tu Mapa Completo de Reconfiguración";
+var EMAIL_INTRO_DEFAULT = "Adjunto encontrarás tu Mapa Completo de Reconfiguración, generado a partir de tu diagnóstico “¿Fortaleza Real o Trampa?”.";
+var FILE_NAME_PREFIX_DEFAULT = "Mapa-de-Reconfiguracion-";
+
 function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents);
@@ -89,9 +107,21 @@ function doPost(e) {
   }
 }
 
-function getSheet_() {
+/**
+ * Devuelve la pestaña del Sheet correspondiente al producto ("resiliencia"
+ * por defecto, o "ikigai"). La pestaña de Ikigai se crea sola la primera vez
+ * que llega un lead de ese producto; la de Resiliencia conserva exactamente
+ * el mismo comportamiento que tenía antes (fallback a la primera pestaña si
+ * "Hoja 1" no existe).
+ */
+function getSheet_(producto) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+  var sheet;
+  if (producto === "ikigai") {
+    sheet = ss.getSheetByName(SHEET_NAME_IKIGAI) || ss.insertSheet(SHEET_NAME_IKIGAI);
+  } else {
+    sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+  }
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(HEADERS);
   }
@@ -99,7 +129,7 @@ function getSheet_() {
 }
 
 function addLead_(data) {
-  var sheet = getSheet_();
+  var sheet = getSheet_(data.producto);
   sheet.appendRow([
     data.nombre || "",
     data.email || "",
@@ -120,7 +150,7 @@ function addLead_(data) {
  * y marca "Sí" en la columna ¿Pagó Reporte? (columna J, índice 10).
  */
 function markPaidAndEmail_(data) {
-  var sheet = getSheet_();
+  var sheet = getSheet_(data.producto);
   var email = (data.email || "").trim().toLowerCase();
   var values = sheet.getDataRange().getValues();
   var emailCol = HEADERS.indexOf("Email");        // 1
@@ -152,12 +182,14 @@ function sendReportEmail_(email, report) {
     buildReportDoc_(tempDoc, report);
     tempDoc.saveAndClose();
 
+    var fileNamePrefix = report.fileNamePrefix || FILE_NAME_PREFIX_DEFAULT;
     var pdfBlob = DriveApp.getFileById(docId).getAs(MimeType.PDF)
-      .setName("Mapa-de-Reconfiguracion-" + (report.nombre || "reporte") + ".pdf");
+      .setName(fileNamePrefix + (report.nombre || "reporte") + ".pdf");
 
-    GmailApp.sendEmail(email, "Tu Mapa Completo de Reconfiguración", "", {
-      htmlBody: "Hola " + (report.nombre || "") + ",<br><br>Adjunto encontrarás tu Mapa Completo de Reconfiguración, " +
-        "generado a partir de tu diagnóstico “¿Fortaleza Real o Trampa?”.<br><br>Método Despierta™ — La Clave Exitosa",
+    var emailSubject = report.emailSubject || EMAIL_SUBJECT_DEFAULT;
+    var emailIntro = report.emailIntro || EMAIL_INTRO_DEFAULT;
+    GmailApp.sendEmail(email, emailSubject, "", {
+      htmlBody: "Hola " + (report.nombre || "") + ",<br><br>" + emailIntro + "<br><br>Método Despierta™ — La Clave Exitosa",
       attachments: [pdfBlob],
       name: "La Clave Exitosa"
     });
@@ -220,13 +252,19 @@ function gap_(body, points) {
 }
 
 /**
- * Inserta la portada (report-cover.jpg) como página propia al inicio del
- * documento. Si la imagen no se puede descargar (dominio caído, etc.), se
- * omite en silencio — el reporte igual se genera y se envía sin portada.
+ * Inserta una portada como página propia al inicio del documento. Si
+ * `coverUrl` es explícitamente `null` (productos sin imagen de portada, como
+ * Ikigai), se omite sin intentar descargar nada. Si es `undefined` (el
+ * reportData de Resiliencia Tóxica no manda este campo), usa la portada por
+ * defecto — mismo comportamiento que antes. Si la imagen no se puede
+ * descargar (dominio caído, etc.), se omite en silencio — el reporte igual
+ * se genera y se envía sin portada.
  */
-function addCoverImage_(body) {
+function addCoverImage_(body, coverUrl) {
+  if (coverUrl === null) return;
+  var url = coverUrl || REPORT_COVER_URL;
   try {
-    var blob = UrlFetchApp.fetch(REPORT_COVER_URL).getBlob();
+    var blob = UrlFetchApp.fetch(url).getBlob();
     var image = body.appendImage(blob);
     var ratio = image.getHeight() / image.getWidth();
     var width = 480;
@@ -254,11 +292,11 @@ function buildReportDoc_(doc, r) {
   body.clear();
   body.setMarginTop(30).setMarginBottom(30).setMarginLeft(32).setMarginRight(32);
 
-  addCoverImage_(body);
+  addCoverImage_(body, r.coverUrl);
 
   // ---- Encabezado ----
   var header = addBand_(body, C.carbon);
-  writeLine_(header, true, "TU MAPA DE RECONFIGURACIÓN", { font: SANS_FONT, size: 9, bold: true, color: C.terracota, spacingAfter: 6 });
+  writeLine_(header, true, r.eyebrowReporte || REPORT_EYEBROW_DEFAULT, { font: SANS_FONT, size: 9, bold: true, color: C.terracota, spacingAfter: 6 });
   writeLine_(header, false, "Tu diagnóstico, " + (r.nombre || ""), { font: SERIF_FONT, size: 19, bold: true, color: C.cream, spacingAfter: 10 });
   writeLine_(header, false, r.intro || "", { font: SANS_FONT, size: 10, color: C.ashDark, lineSpacing: 1.3 });
 

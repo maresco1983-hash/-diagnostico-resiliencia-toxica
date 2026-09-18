@@ -1,11 +1,12 @@
 /* ============================================================================
-   main.js — motor del quiz, velocímetro, captura de leads y tracking de origen.
-   IIFE clásico, sin dependencias externas. Ver lib/manifest.js para datos.
+   ikigai-main.js — motor del quiz, velocímetro, captura de leads y tracking de
+   origen para el diagnóstico "¿Vives tu Propósito o Sobrevives tu Agenda?".
+   IIFE clásico, independiente de main.js. Ver lib/manifest-ikigai.js.
    ============================================================================ */
 (function () {
   "use strict";
 
-  var BRAND = window.__BRAND__ || {};
+  var BRAND = window.__BRAND_IKIGAI__ || {};
   var $ = function (sel, scope) { return (scope || document).querySelector(sel); };
   var $$ = function (sel, scope) { return Array.from((scope || document).querySelectorAll(sel)); };
   function safe(fn, name) { try { fn(); } catch (e) { console.warn("[" + name + "] failed:", e); } }
@@ -15,8 +16,8 @@
     });
   }
 
-  var STORAGE_REF = "frt_ref";
-  var STORAGE_RESULT = "frt_result";
+  var STORAGE_REF = "ikigai_ref";
+  var STORAGE_RESULT = "ikigai_result";
 
   // ------------------------------------------------------------------
   // Aplanar las preguntas de los 3 bloques en una lista lineal de 12.
@@ -191,7 +192,7 @@
     $("[data-result-frase]").textContent = zonaInfo.frase || "";
 
     // Guardar en memoria para el envío del formulario.
-    window.__FRT_RESULT__ = results;
+    window.__IKIGAI_RESULT__ = results;
   }
 
   // ------------------------------------------------------------------
@@ -220,10 +221,11 @@
     var form = e.target;
     if (!form.reportValidity()) return;
 
-    var results = window.__FRT_RESULT__ || computeResults();
+    var results = window.__IKIGAI_RESULT__ || computeResults();
     var zonaInfo = (BRAND.zonasTotal || {})[results.zonaTotal] || {};
 
     var lead = {
+      producto: BRAND.producto || "ikigai",
       nombre: $("#f-nombre", form).value.trim(),
       email: $("#f-email", form).value.trim(),
       whatsapp: $("#f-whatsapp", form).value.trim(),
