@@ -41,24 +41,101 @@
   };
 
   // ------------------------------------------------------------------
-  // Tracking de origen (?ref=)
+  // Tracking de origen (UTM + referrer), localStorage con caducidad de 30
+  // días. Si llegan parámetros UTM nuevos, siempre ganan (último clic).
   // ------------------------------------------------------------------
+  var REF_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+  var REF_DEFAULT = { utmSource: "", utmMedium: "", utmCampaign: "", utmContent: "", origen: "directo" };
+
+  function parseUtmFromUrl_() {
+    var params = new URLSearchParams(window.location.search);
+    var utmSource = (params.get("utm_source") || "").trim();
+    var utmMedium = (params.get("utm_medium") || "").trim();
+    var utmCampaign = (params.get("utm_campaign") || "").trim();
+    var utmContent = (params.get("utm_content") || "").trim();
+    var origenCorto = (params.get("origen") || "").trim();
+    if (!utmSource && !utmMedium && !utmCampaign && !utmContent && !origenCorto) return null;
+    return {
+      utmSource: utmSource,
+      utmMedium: utmMedium,
+      utmCampaign: utmCampaign,
+      utmContent: utmContent,
+      origen: origenCorto || utmSource || "desconocido"
+    };
+  }
+
+  // Referrer solo sirve como respaldo cuando no hay UTM — en móvil, Instagram
+  // y Facebook casi nunca lo envían (navegador interno de la app), así que
+  // esto ayuda sobre todo en desktop, Google y WhatsApp Web.
+  function inferFromReferrer_() {
+    var ref = document.referrer || "";
+    if (!ref) return null;
+    var host = "";
+    try { host = new URL(ref).hostname.toLowerCase(); } catch (e) { return null; }
+
+    var MAP = [
+      { test: /instagram\.com/, source: "instagram", medium: "organico" },
+      { test: /facebook\.com/, source: "facebook", medium: "organico" },
+      { test: /(youtube\.com|youtu\.be)/, source: "youtube", medium: "organico" },
+      { test: /(wa\.me|whatsapp\.com)/, source: "whatsapp", medium: "dm" },
+      { test: /google\./, source: "google", medium: "organico" }
+    ];
+    for (var i = 0; i < MAP.length; i++) {
+      if (MAP[i].test.test(host)) {
+        return { utmSource: MAP[i].source, utmMedium: MAP[i].medium, utmCampaign: "", utmContent: "", origen: MAP[i].source };
+      }
+    }
+    // Dominio no reconocido: se guarda tal cual en "origen", sin inventar utm_source/medium.
+    return { utmSource: "", utmMedium: "", utmCampaign: "", utmContent: "", origen: host };
+  }
+
   function captureRef() {
     try {
-      var params = new URLSearchParams(window.location.search);
-      var ref = params.get("ref");
-      if (ref) {
-        localStorage.setItem(STORAGE_REF, ref.trim());
-      } else if (!localStorage.getItem(STORAGE_REF)) {
-        localStorage.setItem(STORAGE_REF, "directo");
+      var fromUrl = parseUtmFromUrl_();
+      if (fromUrl) {
+        localStorage.setItem(STORAGE_REF, JSON.stringify({ data: fromUrl, savedAt: Date.now() }));
+        return;
       }
+
+      var existingRaw = localStorage.getItem(STORAGE_REF);
+      if (existingRaw) {
+        try {
+          var existing = JSON.parse(existingRaw);
+          if (existing && existing.data && existing.savedAt && (Date.now() - existing.savedAt) < REF_MAX_AGE_MS) {
+            return; // origen vigente (<30 días) — no lo pisamos con "directo"
+          }
+        } catch (e) { /* formato viejo o corrupto: se regenera abajo */ }
+      }
+
+      var fromReferrer = inferFromReferrer_();
+      localStorage.setItem(STORAGE_REF, JSON.stringify({ data: fromReferrer || REF_DEFAULT, savedAt: Date.now() }));
     } catch (e) {
       console.warn("[captureRef] no se pudo leer/guardar el origen:", e);
     }
   }
+
   function getRef() {
-    try { return localStorage.getItem(STORAGE_REF) || "directo"; }
-    catch (e) { return "directo"; }
+    try {
+      var raw = localStorage.getItem(STORAGE_REF);
+      if (!raw) return REF_DEFAULT;
+      var parsed = JSON.parse(raw);
+      if (!parsed || !parsed.data) return REF_DEFAULT;
+      if (parsed.savedAt && (Date.now() - parsed.savedAt) >= REF_MAX_AGE_MS) return REF_DEFAULT;
+      return parsed.data;
+    } catch (e) {
+      return REF_DEFAULT;
+    }
+  }
+
+  // Agrega el parámetro de rastreo "src" de Hotmart al link de checkout,
+  // derivado del origen capturado (ej. "instagram-bio-resiliencia").
+  function appendHotmartSrc_(baseUrl, refData) {
+    if (!baseUrl || baseUrl === "#") return baseUrl;
+    var parts = [refData.utmSource, refData.utmMedium, refData.utmCampaign].filter(Boolean);
+    if (!parts.length) return baseUrl;
+    var src = encodeURIComponent(parts.join("-"));
+    var sep = baseUrl.indexOf("?") === -1 ? "?" : "&";
+    return baseUrl + sep + "src=" + src;
   }
 
   // ------------------------------------------------------------------
@@ -222,6 +299,7 @@
 
     var results = window.__FRT_RESULT__ || computeResults();
     var zonaInfo = (BRAND.zonasTotal || {})[results.zonaTotal] || {};
+    var refData = getRef();
 
     var lead = {
       nombre: $("#f-nombre", form).value.trim(),
@@ -237,7 +315,11 @@
       zonaBloque2: results.zonaBloque2,
       zonaBloque3: results.zonaBloque3,
       pagoReporte: "No",
-      origen: getRef()
+      origen: refData.origen || "directo",
+      utmSource: refData.utmSource || "",
+      utmMedium: refData.utmMedium || "",
+      utmCampaign: refData.utmCampaign || "",
+      utmContent: refData.utmContent || ""
     };
 
     try {
@@ -252,7 +334,7 @@
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "¡Listo!"; }
 
     var hotmartLink = $("[data-hotmart-reporte]");
-    if (hotmartLink) hotmartLink.href = (BRAND.urls || {}).hotmartReporte || "#";
+    if (hotmartLink) hotmartLink.href = appendHotmartSrc_((BRAND.urls || {}).hotmartReporte || "#", refData);
 
     $("[data-unlock-box]").hidden = false;
     $("[data-unlock-box]").scrollIntoView({ behavior: "smooth", block: "start" });

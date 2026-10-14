@@ -62,6 +62,9 @@ var HEADERS = [
   "Puntaje Bloque 1", "Puntaje Bloque 2", "Puntaje Bloque 3", "Puntaje Total",
   "¿Pagó Reporte?", "Origen del Tráfico"
 ];
+// Columnas de tracking de origen + marca de prueba, agregadas AL FINAL de las
+// 11 columnas originales (nunca se mueven ni se borran filas existentes).
+var EXTRA_TRACKING_HEADERS = ["UTM Source", "UTM Medium", "UTM Campaign", "UTM Content", "Es prueba"];
 
 // Paleta de marca — debe coincidir con :root en styles.css
 var BRAND_COLORS = {
@@ -125,11 +128,41 @@ function getSheet_(producto) {
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(HEADERS);
   }
+  ensureTrackingColumns_(sheet);
   return sheet;
+}
+
+/**
+ * Agrega, una sola vez por hoja, las columnas de tracking (UTM Source/Medium/
+ * Campaign/Content + Es prueba) justo después de las 11 columnas originales
+ * (posición fija: columna 12 en adelante). Si ya están, no hace nada. La
+ * primera vez que las crea, también rellena "Es prueba" para TODAS las filas
+ * ya existentes según el nombre (sin tocar ninguna otra columna ni mover filas).
+ */
+function ensureTrackingColumns_(sheet) {
+  var col = HEADERS.length + 1; // columna 12 (L)
+  var current = sheet.getRange(1, col, 1, EXTRA_TRACKING_HEADERS.length).getValues()[0];
+  if (current.join("|") === EXTRA_TRACKING_HEADERS.join("|")) return;
+
+  sheet.getRange(1, col, 1, EXTRA_TRACKING_HEADERS.length).setValues([EXTRA_TRACKING_HEADERS]);
+  backfillEsPrueba_(sheet, col + EXTRA_TRACKING_HEADERS.length - 1);
+}
+
+/** Rellena la columna "Es prueba" para las filas ya existentes, sin tocar nada más. */
+function backfillEsPrueba_(sheet, esPruebaCol) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  var nombres = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  var valores = nombres.map(function (fila) {
+    var nombre = String(fila[0] || "").trim();
+    return [/^prueba/i.test(nombre) ? "Sí" : "No"];
+  });
+  sheet.getRange(2, esPruebaCol, valores.length, 1).setValues(valores);
 }
 
 function addLead_(data) {
   var sheet = getSheet_(data.producto);
+  var esPrueba = /^prueba/i.test(String(data.nombre || "").trim()) ? "Sí" : "No";
   sheet.appendRow([
     data.nombre || "",
     data.email || "",
@@ -141,7 +174,12 @@ function addLead_(data) {
     data.puntajeBloque3 != null ? data.puntajeBloque3 : "",
     data.puntajeTotal != null ? data.puntajeTotal : "",
     data.pagoReporte || "No",
-    data.origen || "directo"
+    data.origen || "directo",
+    data.utmSource || "",
+    data.utmMedium || "",
+    data.utmCampaign || "",
+    data.utmContent || "",
+    esPrueba
   ]);
 }
 
