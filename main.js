@@ -127,15 +127,32 @@
     }
   }
 
-  // Agrega el parámetro de rastreo "src" de Hotmart al link de checkout,
-  // derivado del origen capturado (ej. "instagram-bio-resiliencia").
+  // Agrega los parámetros de rastreo de Hotmart al link de checkout:
+  // "src" (igual que antes, sin cambios), derivado del origen capturado
+  // (ej. "instagram-bio-resiliencia"), y "sck" con la pieza/palabra
+  // (utmContent), solo si hay utmContent. Si ya existiera un "sck" en el
+  // link, se reemplaza — nunca se duplica.
   function appendHotmartSrc_(baseUrl, refData) {
     if (!baseUrl || baseUrl === "#") return baseUrl;
+    var url = baseUrl;
+
     var parts = [refData.utmSource, refData.utmMedium, refData.utmCampaign].filter(Boolean);
-    if (!parts.length) return baseUrl;
-    var src = encodeURIComponent(parts.join("-"));
-    var sep = baseUrl.indexOf("?") === -1 ? "?" : "&";
-    return baseUrl + sep + "src=" + src;
+    if (parts.length) {
+      var src = encodeURIComponent(parts.join("-"));
+      var sep = url.indexOf("?") === -1 ? "?" : "&";
+      url = url + sep + "src=" + src;
+    }
+
+    if (refData.utmContent) {
+      var sck = encodeURIComponent(String(refData.utmContent).slice(0, 100));
+      url = url
+        .replace(/([?&])sck=[^&]*&/, "$1")
+        .replace(/[?&]sck=[^&]*$/, "");
+      var sepSck = url.indexOf("?") === -1 ? "?" : "&";
+      url = url + sepSck + "sck=" + sck;
+    }
+
+    return url;
   }
 
   // ------------------------------------------------------------------
